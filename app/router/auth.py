@@ -1,74 +1,33 @@
 import os
-import secrets
-import hashlib
-import base64
-from pathlib import Path
-
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
-
-from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-
 from app.config import (
     GOOGLE_REDIRECT_URI,
     FRONTEND_URL
 )
+from app.service.auth_service import AuthService
+from app.service.user_service import UserService
 
 router = APIRouter(
     prefix="/auth",
     tags=["Auth"]
 )
 
-SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/gmail.readonly"
-]
-
-CREDENTIALS_PATH = Path(__file__).resolve().parent.parent.parent / "credentials.json"
-
+user_service = UserService()
+auth_service = AuthService()
 PKCE_VERIFIERS = {}
-
-
-def generate_code_verifier():
-    return secrets.token_urlsafe(64)
-
-
-def generate_code_challenge(verifier):
-    digest = hashlib.sha256(verifier.encode("utf-8")).digest()
-    return base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
-
-
-def create_flow():
-    if not CREDENTIALS_PATH.exists():
-        raise HTTPException(
-            status_code=500,
-            detail=f"credentials.json not found at {CREDENTIALS_PATH}"
-        )
-
-    flow = Flow.from_client_secrets_file(
-        str(CREDENTIALS_PATH),
-        scopes=SCOPES
-    )
-
-    flow.redirect_uri = GOOGLE_REDIRECT_URI
-
-    return flow
-
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 @router.get("/google/login")
 async def google_login():
     try:
-        flow = create_flow()
+        flow = auth_service.create_flow()
     except HTTPException:
         raise
 
-    code_verifier = generate_code_verifier()
-    code_challenge = generate_code_challenge(code_verifier)
+    code_verifier = auth_service.generate_code_verifier()
+    code_challenge = auth_service.generate_code_challenge(code_verifier)
 
     authorization_url, state = flow.authorization_url(
         access_type="offline",
@@ -110,7 +69,7 @@ async def google_callback(request: Request):
     code_verifier = PKCE_VERIFIERS.pop(state)
 
     try:
-        flow = create_flow()
+        flow = auth_service.create_flow()
 
         flow.fetch_token(
             authorization_response=str(request.url),
@@ -141,6 +100,21 @@ async def google_callback(request: Request):
             gmail_service.users()
             .getProfile(userId="me")
             .execute()
+        )
+
+        user = user_service.create_user(
+            user_info.get("email"),
+            user_info.get("name")
+        )
+
+        print("\n========== USER ==========")
+        print(user)
+
+        auth_service.create_token(
+            email="gmail",
+            access_token=credentials.token,
+            refresh_token=credentials.refresh_token,
+            expires_in=credentials.expiry.timestamp()
         )
 
         print("\n========== USER INFO ==========")

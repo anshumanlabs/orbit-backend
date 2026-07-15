@@ -12,7 +12,7 @@ class UserService:
 
     def create_user(self, email: str, name: str) -> User | None:
         try:
-            return self.user_repository.create(name=name, email=email)
+            return self.user_repository.createUser(name=name, email=email)
         except Exception:
             return None
     

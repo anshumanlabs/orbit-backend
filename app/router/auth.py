@@ -1,4 +1,5 @@
 import os
+from datetime import timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from googleapiclient.discovery import build
@@ -109,23 +110,23 @@ async def google_callback(request: Request):
 
         print("\n========== USER ==========")
         print(user)
+        print("========== USER ==========\n")
+        print("credentials:", credentials)
 
-        auth_service.create_token(
-            email="gmail",
-            access_token=credentials.token,
+        expires_at = credentials.expiry
+        if expires_at is not None and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        print("expires_at:", expires_at)
+
+        token = auth_service.create_token(
+            email=user_info.get("email"),
             refresh_token=credentials.refresh_token,
-            expires_in=credentials.expiry.timestamp()
+            access_token=credentials.token,
+            expires_at=expires_at,
         )
 
-        print("\n========== USER INFO ==========")
-        print(user_info)
-
-        print("\n========== GMAIL PROFILE ==========")
-        print(profile)
-
-        print("\n========== TOKENS ==========")
-        print("Access Token:", credentials.token)
-        print("Refresh Token:", credentials.refresh_token)
+        print(f"Token created: {token}")
 
         return RedirectResponse(
             url=f"{FRONTEND_URL}/dashboard"

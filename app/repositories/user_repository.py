@@ -12,16 +12,15 @@ class UserRepository:
     def __init__(self, db: Optional[Session] = None):
         self.db = db or SessionLocal()
 
-    def create(self, name: str, email: Optional[str] = None) -> Optional[User]:
-        try:
+    def createUser(self, name: str, email: Optional[str] = None) -> Optional[User]:
+            existing_user = self.db.query(User).filter(User.email == email).first()
+            if existing_user:
+                return existing_user
             user = User(name=name, email=email)
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
             return user
-        except SQLAlchemyError:
-            self.db.rollback()
-            return None
 
     def get_by_id(self, user_id: UUID) -> Optional[User]:
         return self.db.query(User).filter(User.id == user_id).first()

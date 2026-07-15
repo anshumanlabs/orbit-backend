@@ -3,6 +3,7 @@ import secrets
 import hashlib
 import base64
 from datetime import datetime, timedelta
+from uuid import UUID
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
@@ -65,26 +66,12 @@ class AuthService:
         email: str,
         refresh_token: str,
         access_token: str | None = None,
-        expires_in: int | None = None,
-        user_id: str | None = None,
         expires_at: datetime | None = None,
     ):
-        try:
-            if expires_at is None:
-                if expires_in is not None:
-                    expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-                else:
-                    expires_at = datetime.utcnow()
-
-            if user_id is None:
-                user_id = email
-
             return self.oauth_token_repository.upsert(
-                user_id=user_id,
                 email=email,
                 provider="google",
                 refresh_token=refresh_token,
+                access_token=access_token,
                 expires_at=expires_at,
             )
-        except Exception:
-            return None

@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import timezone
 from fastapi import APIRouter, HTTPException, Request
@@ -19,6 +20,28 @@ user_service = UserService()
 auth_service = AuthService()
 PKCE_VERIFIERS = {}
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
+
+def build_auth_redirect_response(frontend_url: str, token_payload: dict, user_payload: dict):
+    response = RedirectResponse(url=f"{frontend_url}/dashboard")
+    response.set_cookie(
+        key="auth_token",
+        value=json.dumps(token_payload),
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+    )
+    response.set_cookie(
+        key="user",
+        value=json.dumps(user_payload),
+        httponly=False,
+        secure=False,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+    )
+    return response
+
 
 @router.get("/google/login")
 async def google_login():
@@ -128,8 +151,21 @@ async def google_callback(request: Request):
 
         print(f"Token created: {token}")
 
-        return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard"
+        token_payload = {
+            "access_token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        }
+        user_payload = {
+            "id": str(user.id) if user else None,
+            "email": user.email if user else user_info.get("email"),
+            "name": user.name if user else user_info.get("name"),
+        }
+
+        return build_auth_redirect_response(
+            frontend_url=FRONTEND_URL,
+            token_payload=token_payload,
+            user_payload=user_payload,
         )
 
     except HTTPException:
